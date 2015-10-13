@@ -35,12 +35,32 @@ class API(object):
         try:
             return object.__getattribute__(self, name)
         except:
-            return lambda: self.invoke(name)
+            return lambda *params: self.invoke(name, params)
 
     def url(self):
         return '{self.endpoint}/sony/camera'.format(self=self)
 
-    def invoke(self, method):
-        logger.debug(
-            'API.invoke(url=%s, request=%s)', self.url(), str(Request(method)))
-        return requests.post(self.url(), str(Request(method))).json()
+    def invoke(self, method, params=None):
+        req = Request(method, params)
+
+        logger.debug('API.invoke(url=%s, request=%s)', self.url(), str(req))
+
+        return requests.post(self.url(), str(req)).json()
+
+
+class APIMock(API):
+    def invoke(self, method, params=None):
+        req = Request(method, params)
+
+        logger.debug('APIMock.invoke(url=%s, request=%s)', self.url(), str(req))
+
+        return {
+            'error': [
+                40401,
+                'Camera Not Ready ({0}{1})'.format(
+                    req.method,
+                    req.params
+                )
+            ],
+            'id': req.id
+        }
