@@ -27,9 +27,38 @@ class Request(object):
         return json.dumps(self.__dict__)
 
 
-class API(object):
-    def __init__(self, endpoint):
-        self.endpoint = endpoint
+class BusinessException(Exception):
+    def __init__(self, method, params, code, message):
+        super(BusinessException, self).__init__(message)
+        self.method = method
+        self.params = params
+        self.code = code
+        self.message = message
+
+    def __str__(self):
+        return '{method}{params}: {message} ({code})'.format(**self.__dict__)
+
+
+class Service(object):
+    def __init__(self, endpoint, path, id):
+        self.url = '{0}/sony/{1}'.format(endpoint, path)
+        self.id = id
+
+        self.versions = {}
+
+        self.init()
+
+    def init(self):
+        try:
+            method_types = self._invoke(
+                'getMethodTypes', ['1.0'])['results']
+        except:
+            return
+
+        for method_type in method_types:
+            self.versions[method_type[0]] = method_type[3]
+
+        logger.debug('Versions: %s', self.versions)
 
     def __getattribute__(self, name):
         try:
@@ -37,30 +66,58 @@ class API(object):
         except:
             return lambda *params: self.invoke(name, params)
 
-    def url(self):
-        return '{self.endpoint}/sony/camera'.format(self=self)
-
     def invoke(self, method, params=None):
-        req = Request(method, params)
+        res = self._invoke(method, params)
 
-        logger.debug('API.invoke(url=%s, request=%s)', self.url(), str(req))
+        if 'error' in res and res['error'][0] != 0:
+            raise BusinessException(method, params, *res['error'])
 
-        return requests.post(self.url(), str(req)).json()
+        if 'results' in res:
+            return res['results']
+
+        return res['result']
+
+    def _invoke(self, method, params=None):
+        logger.debug('Invoking %s%s on %s', method, params, self.url)
+
+        req = Request(
+            method,
+            params,
+            self.id,
+            self.versions.get(method, '1.0')
+        )
+
+        logger.debug('Request: %s', str(req))
+
+        res = requests.post(self.url, str(req))
+
+        logger.debug('Response: %s', res.content)
+
+        try:
+            return res.json()
+        except ValueError as e:
+            logger.warn('Error while decoding JSON: %s', e.message)
+            raise
 
 
-class APIMock(API):
-    def invoke(self, method, params=None):
-        req = Request(method, params)
+class Camera(Service):
+    def __init__(self, endpoint, id):
+        super(Camera, self).__init__(endpoint, 'camera', id)
 
-        logger.debug('APIMock.invoke(url=%s, request=%s)', self.url(), str(req))
 
-        return {
-            'error': [
-                40401,
-                'Camera Not Ready ({0}{1})'.format(
-                    req.method,
-                    req.params
-                )
-            ],
-            'id': req.id
-        }
+class AvContent(Service):
+    def __init__(self, endpoint, id):
+        super(AvContent, self).__init__(endpoint, 'avContent', id)
+
+
+class System(Service):
+    def __init__(self, endpoint, id):
+        super(System, self).__init__(endpoint, 'system', id)
+
+
+class API(object):
+    def __init__(self, endpoint='http://192.168.122.1:8080'):
+        id = 1
+        self.camera = Camera(endpoint, id)
+        self.avContent = AvContent(endpoint, id)
+        self.system = System(endpoint, id)

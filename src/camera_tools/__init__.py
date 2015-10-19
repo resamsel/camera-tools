@@ -4,7 +4,7 @@
 import logging
 
 
-class CameraOp(object):
+class CameraApp(object):
     def __init__(self, args):
         self.args = args
 
@@ -13,3 +13,5 @@ class CameraOp(object):
             level=args.loglevel,
             format="%(asctime)s %(levelname)s %(name)s: %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S")
+
+        logging.getLogger('requests').setLevel(logging.WARN)

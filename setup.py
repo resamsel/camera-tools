@@ -48,7 +48,8 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'timeseries = camera_tools.timeseries:main'
+            'timeseries = camera_tools.timeseries:main',
+            'sony-remote = camera_tools.remote:main'
         ]
     }
 )
